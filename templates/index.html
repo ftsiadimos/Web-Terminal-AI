@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Terminal</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Terminal</h1>
+            <div class="status-bar">
+                <span id="connection-status" class="status disconnected">Disconnected</span>
+                <span id="ssh-status" class="status disconnected">SSH: Not Connected</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <details>
+                    <summary>SSH Connection</summary>
+                    <div class="panel">
+                        
+                        <!-- Saved Hosts Dropdown -->
+                    <div class="form-group">
+                        <label>Saved Hosts:</label>
+                        <select id="saved-hosts" onchange="loadHostConfig(this.value)">
+                            <option value="">Select a saved host...</option>
+                        </select>
+                    </div>
+                    
+                    <form id="ssh-form">
+                        <div class="form-group">
+                            <label>Host Name (for saving):</label>
+                            <input type="text" id="host-name" placeholder="e.g., My Server">
+                        </div>
+                        <div class="form-group">
+                            <label>Host:</label>
+                            <input type="text" id="ssh-host" placeholder="e.g., 192.168.1.100">
+                        </div>
+                        <div class="form-group">
+                            <label>Port:</label>
+                            <input type="number" id="ssh-port" placeholder="22" value="22">
+                        </div>
+                        <div class="form-group">
+                            <label>Username:</label>
+                            <input type="text" id="ssh-username" placeholder="root">
+                        </div>
+                        <div class="form-group">
+                            <label>Password:</label>
+                            <input type="password" id="ssh-password" placeholder="password">
+                        </div>
+                        <div class="form-group">
+                            <label>Key File (optional):</label>
+                            <input type="text" id="ssh-keyfile" placeholder="/path/to/key">
+                        </div>
+                        <div class="btn-group" style="display: flex; flex-wrap: wrap; gap: 5px;">
+                            <button type="submit" class="btn btn-primary" style="flex: 1; min-width: 120px;">Connect SSH</button>
+                            <button type="button" class="btn btn-secondary" onclick="saveSettings()" style="flex: 1; min-width: 120px;">Save Settings</button>
+                            <button type="button" class="btn btn-secondary" onclick="saveCurrentHost()" style="flex: 1; min-width: 120px;">Save Host</button>
+                            <button type="button" class="btn btn-secondary" onclick="deleteCurrentHost()" style="flex: 1; min-width: 120px;">Delete Host</button>
+                        </div>
+                    </form>
+                </div>
+                </details>
+
+                <details>
+                    <summary>AI Settings</summary>
+                    <div class="panel">
+                    <div class="form-group">
+                        <label>AI Name:</label>
+                        <input type="text" id="ai-name" placeholder="e.g., Assistant" value="Assistant">
+                    </div>
+                    <div class="form-group">
+                        <label>AI Role:</label>
+                        <input type="text" id="ai-role" placeholder="e.g., Linux Expert" value="Linux Expert">
+                    </div>
+                    <div class="form-group">
+                        <label>Ollama URL:</label>
+                        <input type="text" id="ollama-url" placeholder="http://localhost:11434" value="http://localhost:11434">
+                    </div>
+                    <button class="btn btn-secondary" onclick="fetchOllamaModels()">Load Models</button>
+                    <div id="ollama-status" style="margin-top: 10px; font-size: 0.9em;"></div>
+                    <div class="form-group">
+                        <label>Model:</label>
+                        <select id="model-select">
+                            <option value="">Select a model...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="auto-execute" checked>
+                            Auto-execute commands
+                        </label>
+                    </div>
+                </div>
+                </details>
+            </div>
+
+            <div class="terminal-area">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="terminal">Terminal</button>
+                    <button class="tab-btn" data-tab="ai">AI Chat</button>
+                </div>
+
+                <div id="terminal" class="tab-content active">
+                    <div id="terminal-output" class="terminal-output"></div>
+                    <div class="input-area">
+                        <span class="prompt">$ </span>
+                        <input type="text" id="command-input" class="command-input" placeholder="Enter command or natural language...">
+                    </div>
+                </div>
+
+                <div id="ai" class="tab-content">
+                    <div id="ai-output" class="ai-output"></div>
+                    <div class="input-area">
+                        <input type="text" id="ai-input" class="command-input" placeholder="Ask AI to help or describe a command...">
+                        <button class="btn btn-small" onclick="sendAIPrompt()">Send</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
+
