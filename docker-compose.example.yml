@@ -1,0 +1,77 @@
+# Example docker-compose for Web-AI-Terminal
+# Copy to `docker-compose.yml` or run directly with `-f docker-compose.example.yml`.
+# Includes the app (built from this repo) and an Ollama service used by the app.
+
+version: '3.8'
+
+services:
+  ai-terminal:
+    image: ftsiadimos/webaiterminal:latest  # pulls prebuilt image from Docker Hub
+    # Use `env_file: .env` to load variables from a file in development
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_HOST: "0.0.0.0"
+      FLASK_PORT: "5000"
+      FLASK_DEBUG: "False"        # set to "True" for local dev
+      SECRET_KEY: "change-this-in-production"
+      OLLAMA_HOST: "http://ollama:11434"
+    depends_on:
+      - ollama
+    networks:
+      - ai-network
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai-network
+    restart: unless-stopped
+    # GPU note: if you need GPU support, configure the Docker runtime on the host.
+    # Example (host must support NVIDIA Container Toolkit / GPU runtime):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+# Optional local-dev service (uncomment to enable live-reload)
+# web-dev:
+#   build: .
+#   command: flask run --host=0.0.0.0 --port=5000
+#   env_file: .env
+#   volumes:
+#     - ./:/app:delegated
+#   ports:
+#     - "5000:5000"
+#   depends_on:
+#     - ollama
+#   networks:
+#     - ai-network
+#   restart: unless-stopped
+
+volumes:
+  ollama_data:
+
+networks:
+  ai-network:
+    driver: bridge
+
+# Quick usage
+#  - Start (builds the app image):
+#      docker compose -f docker-compose.example.yml up -d --build
+#  - Start without building (use local image if present):
+#      docker compose -f docker-compose.example.yml up -d
+#  - Stop:
+#      docker compose -f docker-compose.example.yml down
+#  - Use environment file:
+#      docker compose --env-file .env -f docker-compose.example.yml up -d
+#  - If you already run an Ollama elsewhere and don't want the local service,
+#    use `docker-compose.no-ollama.yml` (provided in this repo) or set
+#    `OLLAMA_HOST` to your remote Ollama endpoint.
