@@ -199,8 +199,109 @@ body {
     border-bottom-color: #58a6ff;
 }
 
+/* light theme overrides */
+.theme-light body,
+.theme-light .container,
+.theme-light .main-content,
+.theme-light .sidebar,
+.theme-light .terminal-area {
+    background: #f5f5f5;
+    color: #222;
+}
+
+.theme-light .header {
+    background: #e0e0e0;
+    border-bottom: 1px solid #ccc;
+}
+
+.theme-light .status-bar .status.connected {
+    background: #238636;
+    color: #fff;
+}
+
+.theme-light .status-bar .status.disconnected {
+    background: #da3633;
+    color: #fff;
+}
+
+.theme-light .panel {
+    background: #fff;
+    border: 1px solid #ccc;
+}
+
+.theme-light input,
+.theme-light select {
+    background: #fff;
+    color: #222;
+    border: 1px solid #ccc;
+}
+
+.theme-light .btn {
+    background: #238636;
+    color: #fff;
+}
+
+.theme-light .btn:hover {
+    background: #2ea043;
+}
+
+.theme-light .btn-primary,
+.theme-light .btn-secondary {
+    background: #1f6feb;
+}
+
+.theme-light .btn-primary:hover,
+.theme-light .btn-secondary:hover {
+    background: #388bfd;
+}
+
+.theme-light .tab-btn {
+    color: #444;
+}
+
+.theme-light .tab-btn.active {
+    color: #1f6feb;
+    border-bottom-color: #1f6feb;
+}
+
 .tab-btn:hover {
     color: #c9d1d9;
+}
+
+/* ensure terminal and AI output panels follow light theme */
+.theme-light .terminal-output,
+.theme-light .ai-output {
+    background: #fff;
+    border: 1px solid #ccc;
+    color: #222;
+}
+
+.theme-light .output-line {
+    color: #222;
+}
+
+.theme-light .output-line.command {
+    color: #1f6feb;
+}
+
+.theme-light .output-line.error {
+    color: #f85149;
+}
+
+.theme-light .output-line.success {
+    color: #3fb950;
+}
+
+.theme-light .output-line.ai {
+    color: #d29922;
+}
+
+.theme-light .input-area {
+    background: #f5f5f5;
+}
+
+.theme-light .prompt {
+    color: #3fb950;
 }
 
 .tab-content {
@@ -377,6 +478,16 @@ body {
 /* Make sure changes only apply to AI tab */
 #ai .ai-message.assistant { background: rgba(58,45,26,0.6); border-left-color: #d29922; }
 #ai .ai-message.user { background: rgba(26,58,26,0.6); border-left-color: #3fb950; }
+
+/* light theme chat bubble overrides */
+/* darker and richer backgrounds with white text for maximum contrast */
+.theme-light #ai .ai-message.assistant { background: #5f4a30; color: #fff; border-left-color: #d29922; }
+.theme-light #ai .ai-message.user { background: #2e4d2e; color: #fff; border-left-color: #3fb950; }
+
+.theme-light #ai .ai-content strong { color: #fff; }
+.theme-light #ai .ai-content em { color: #eee; }
+.theme-light #ai .ai-heading { color: #1f6feb; }
+
 
 /* AI thinking / typing indicator */
 #ai .ai-thinking-wrap { display: flex; align-items: center; gap: 10px; }

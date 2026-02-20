@@ -13,6 +13,7 @@ const tabContents = document.querySelectorAll('.tab-content');
 const ollamaUrlInput = document.getElementById('ollama-url');
 const modelSelect = document.getElementById('model-select');
 const ollamaStatus = document.getElementById('ollama-status');
+const themeSelect = document.getElementById('theme-select');
 
 // Global state
 let currentOllamaUrl = ollamaUrlInput.value;
@@ -20,10 +21,22 @@ let currentModel = 'llama2';
 let aiName = 'Assistant';
 let aiRole = 'Linux Expert';
 let autoExecute = true;
+let currentTheme = 'dark';
 
-// Conversation history - stores all interactions for context
+// conversation history - stores all interactions for context
 let conversationHistory = [];
 let maxHistoryMessages = 10; // Keep last 10 messages for context
+
+// apply chosen theme by toggling class on document body
+function applyTheme(theme) {
+    currentTheme = theme || 'dark';
+    document.documentElement.classList.remove('theme-dark', 'theme-light');
+    document.documentElement.classList.add(`theme-${currentTheme}`);
+    if (themeSelect) {
+        themeSelect.value = currentTheme;
+    }
+}
+
 
 // Command history for arrow key navigation
 let commandHistory = [];
@@ -47,7 +60,8 @@ const SettingsManager = {
                 role: document.getElementById('ai-role').value,
                 ollamaUrl: document.getElementById('ollama-url').value,
                 autoExecute: document.getElementById('auto-execute').checked,
-                model: currentModel
+                model: currentModel,
+                theme: currentTheme
             }
         };
         
@@ -92,6 +106,9 @@ const SettingsManager = {
                     document.getElementById('auto-execute').checked = settings.ai.autoExecute !== false;
                     if (settings.ai.model) {
                         currentModel = settings.ai.model;
+                    }
+                    if (settings.ai.theme) {
+                        applyTheme(settings.ai.theme);
                     }
                 }
                 
@@ -288,6 +305,14 @@ socket.on('ai_command_result', (data) => {
 });
 
 // Event Listeners
+
+if (themeSelect) {
+    themeSelect.addEventListener('change', () => {
+        applyTheme(themeSelect.value);
+        SettingsManager.saveAllSettings();
+    });
+}
+
 sshForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const host = document.getElementById('ssh-host').value.trim();
@@ -909,6 +934,11 @@ window.addEventListener('load', async () => {
     aiName = document.getElementById('ai-name').value;
     aiRole = document.getElementById('ai-role').value;
     autoExecute = document.getElementById('auto-execute').checked;
+    
+    // apply theme after settings loaded (defaults to dark)
+    if (themeSelect) {
+        applyTheme(themeSelect.value || currentTheme);
+    }
     
     commandInput.focus();
     addTerminalOutput('System', 'AI Terminal Ready', 'success');
