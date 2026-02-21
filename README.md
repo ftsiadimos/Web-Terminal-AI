@@ -24,17 +24,30 @@ Follow these steps to get the project running locally.
 - (Optional) Ollama running locally if you want AI features: `ollama serve` (default: `http://localhost:11434`)
 
 ### Quick start
-1. Clone and enter repository:
+1. Clone the repo and run the Docker container (fastest way to try it):
+
+   ```bash
+   docker run -d --restart unless-stopped -p 1010:1010 --name=webaiterminal ftsiadimos/webaiterminal:latest
+
+   ```
+
+2. Alternatively, start with Docker Compose using the example file:
+
+   ```bash
+   git clone https://github.com/ftsiadimos/Web-Terminal-AI && cd Web-AI-Terminal 
+   cp docker-compose.example.yml docker-compose.yml
+   docker compose pull
+   docker compose up -d
+   ```
+
+3. For local development without containers, use the manual installation:
 
    git clone <repo-url> && cd Web-AI-Terminal
-
-2. Start the app (recommended — automates venv, deps, `.env`):
-
    ./start.sh
 
    - The script will create/activate a virtualenv, install `requirements.txt`, copy `.env.example` → `.env` (if needed), and run the server.
 
-3. Open the UI in your browser:
+4. Open the UI in your browser:
 
    http://localhost:1010
 
@@ -55,6 +68,9 @@ Set or edit `.env` (see `.env.example`) for:
 - `OLLAMA_HOST` (default: `http://localhost:11434`)
 - `OLLAMA_MODEL` (default: `llama2`)
 - `SECRET_KEY`, `FLASK_ENV`, `FLASK_DEBUG`
+
+If you are running via Docker the same variables can be provided in the image or in
+`docker-compose.example.yml` (copy it to `docker-compose.yml` and adjust as needed).
 
 ### Run tests
 - Install test runner (if not installed): `pip install pytest`
