@@ -3,6 +3,12 @@ import json
 import paramiko
 import requests
 from flask import Flask, render_template, request, jsonify
+
+# bring encryption routines in from utils
+from utils import (
+    decrypt_settings,
+    encrypt_settings,
+)
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from threading import Thread
 import time
@@ -48,21 +54,33 @@ def format_history_for_prompt(sid, last_n=10):
         formatted += f"{label}: {msg.get('content', '')}\n"
     return formatted
 def load_settings_from_file():
-    """Load settings from JSON file"""
+    """Load settings from JSON file and decrypt any stored passwords.
+
+    The data on disk is kept encrypted; callers always receive a dictionary
+    containing plaintext values.  ``decrypt_settings`` is a no-op if the
+    environmental key is not available or the stored values were already
+    plaintext (e.g. during initial development).
+    """
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, 'r') as f:
-                return json.load(f)
+                data = json.load(f)
+                return decrypt_settings(data)
         except Exception as e:
             print(f'[Settings] Error loading from file: {e}')
             return {}
     return {}
 
 def save_settings_to_file(settings):
-    """Save settings to JSON file"""
+    """Save settings to JSON file, encrypting passwords in the process."""
     try:
+        # perform a deep copy so nested dicts aren't mutated by encryption;
+        # otherwise saving the same object repeatedly would double-encrypt
+        # values.
+        import copy
+        to_store = encrypt_settings(copy.deepcopy(settings))
         with open(SETTINGS_FILE, 'w') as f:
-            json.dump(settings, f, indent=2)
+            json.dump(to_store, f, indent=2)
         return True
     except Exception as e:
         print(f'[Settings] Error saving to file: {e}')
@@ -638,7 +656,11 @@ def handle_clear_history(_data=None):
 
 @app.route('/api/settings', methods=['GET'])
 def get_settings():
-    """Get user settings from file"""
+    """Get user settings from file
+
+    Returned settings are decrypted so the front end can populate forms.  No
+    changes are made on disk by this endpoint.
+    """
     try:
         settings = load_settings_from_file()
         return jsonify({'success': True, 'settings': settings})
@@ -651,6 +673,7 @@ def get_hosts():
     try:
         settings = load_settings_from_file()
         hosts = settings.get('hosts', [])
+        # hosts are already decrypted by load_settings_from_file
         return jsonify({'success': True, 'hosts': hosts})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})

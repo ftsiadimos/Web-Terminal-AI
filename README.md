@@ -68,6 +68,20 @@ Set or edit `.env` (see `.env.example`) for:
 - `OLLAMA_HOST` (default: `http://localhost:11434`)
 - `OLLAMA_MODEL` (default: `llama2`)
 - `SECRET_KEY`, `FLASK_ENV`, `FLASK_DEBUG`
+- **`SETTINGS_ENC_KEY`** – a Fernet key used to encrypt SSH passwords stored in
+  `user_settings.json`.  You can generate one with:
+  ```bash
+  python - <<'PYTHON'
+  from cryptography.fernet import Fernet
+  print(Fernet.generate_key().decode())
+  PYTHON
+  ```
+  Without this key the application will still run, but passwords will be saved
+  in cleartext.  **If a settings file already contains encrypted values and the
+  key is missing, those fields will be cleared when the server starts**.  You
+  must either supply the same key used originally or re‑enter the password in
+  the UI before attempting SSH connections.
+
 
 If you are running via Docker the same variables can be provided in the image or in
 `docker-compose.example.yml` (copy it to `docker-compose.yml` and adjust as needed).

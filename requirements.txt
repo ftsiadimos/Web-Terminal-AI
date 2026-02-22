@@ -7,3 +7,4 @@ requests==2.31.0
 python-dotenv==1.0.0
 eventlet==0.33.3
 flask_socketio
+cryptography>=41.0.0
