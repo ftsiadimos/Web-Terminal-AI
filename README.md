@@ -1,6 +1,6 @@
 # 🤖 AI Terminal — Web UI for SSH + Ollama
 
-A lightweight Flask app that provides a web-based terminal with AI-assisted command generation (local Ollama) and SSH execution.
+A lightweight Flask app that provides a web-based terminal (SSH only) alongside a separate AI chat pane, with optional Ollama-powered command assistance.
 
 ## Why this repo
 - Quickly prototype running AI-generated shell commands against remote hosts via SSH.
@@ -9,8 +9,8 @@ A lightweight Flask app that provides a web-based terminal with AI-assisted comm
 ---
 
 ## Key features
-- Web terminal UI + multi-tab chat
-- Ollama integration for command generation and analysis
+- Web terminal UI + multi-tab chat (terminal pane is SSH-only; AI chat is separate)
+- Ollama integration for command generation and analysis (via AI tab using `?` or `/ai` prefixes or automatic forwarding on errors)
 - SSH execution (Paramiko)
 - Real-time updates via Socket.IO
 

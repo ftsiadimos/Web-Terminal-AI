@@ -27,24 +27,35 @@ ssh_connections = {}
 ollama_settings = {}
 saved_hosts = {}  # Store saved SSH hosts
 current_directories = {}  # Track current directory per session
-conversation_histories = {}  # Keep server-side chat history per session
+chat_histories = {}      # messages for AI chat tab per session
+terminal_histories = {}  # messages used for terminal AI assistance per session
 
 # Settings management functions
 
-def add_to_history(sid, role, content, max_messages=100):
-    """Add a message to the conversation history for a session."""
+def add_to_history(sid, role, content, chat=True, max_messages=100):
+    """Add a message to either chat or terminal history for a session.
+
+    ``chat`` determines which store to use.  Chat history feeds the AI Chat
+    tab; terminal history is only used when interpreting/executing commands
+    entered in the terminal pane.
+    """
     if not sid:
         return
-    hist = conversation_histories.setdefault(sid, [])
+    store = chat_histories if chat else terminal_histories
+    hist = store.setdefault(sid, [])
     hist.append({'role': role, 'content': content})
-    # Trim history to max_messages
     if len(hist) > max_messages:
-        conversation_histories[sid] = hist[-max_messages:]
+        store[sid] = hist[-max_messages:]
 
 
-def format_history_for_prompt(sid, last_n=10):
-    """Format the last_n messages for inclusion in a prompt."""
-    hist = conversation_histories.get(sid, [])[-last_n:]
+def format_history_for_prompt(sid, last_n=10, chat=True):
+    """Format the last_n messages for inclusion in a prompt.
+
+    ``chat`` selects which history store to use.  Typically terminal commands use
+    ``chat=False``; AI chat interactions use ``chat=True``.
+    """
+    store = chat_histories if chat else terminal_histories
+    hist = store.get(sid, [])[-last_n:]
     if not hist:
         return ""
     formatted = "\nPrevious conversation context:\n"
@@ -67,7 +78,7 @@ def load_settings_from_file():
                 data = json.load(f)
                 return decrypt_settings(data)
         except Exception as e:
-            print(f'[Settings] Error loading from file: {e}')
+            # print(f'[Settings] Error loading from file: {e}')
             return {}
     return {}
 
@@ -83,7 +94,7 @@ def save_settings_to_file(settings):
             json.dump(to_store, f, indent=2)
         return True
     except Exception as e:
-        print(f'[Settings] Error saving to file: {e}')
+        # print(f'[Settings] Error saving to file: {e}')
         return False
 
 class SSHClient:
@@ -98,25 +109,25 @@ class SSHClient:
         
     def connect(self):
         try:
-            print(f'[SSHClient] Creating paramiko client')
+            # print(f'[SSHClient] Creating paramiko client')
             self.client = paramiko.SSHClient()
             self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             
             if self.key_file:
-                print(f'[SSHClient] Connecting with key file: {self.key_file}')
+                # print(f'[SSHClient] Connecting with key file: {self.key_file}')
                 self.client.connect(self.host, port=self.port, username=self.username, 
                                    key_filename=self.key_file, timeout=10)
             else:
-                print(f'[SSHClient] Connecting with password')
+                # print(f'[SSHClient] Connecting with password')
                 self.client.connect(self.host, port=self.port, username=self.username, 
                                    password=self.password, timeout=10)
             self.connected = True
-            print(f'[SSHClient] Connection successful')
+            # print(f'[SSHClient] Connection successful')
             return True, "Connected successfully"
         except Exception as e:
-            print(f'[SSHClient] Connection error: {str(e)}')
+            # print(f'[SSHClient] Connection error: {str(e)}')
             import traceback
-            print(f'[SSHClient] Traceback: {traceback.format_exc()}')
+            # print(f'[SSHClient] Traceback: {traceback.format_exc()}')
             return False, str(e)
     
     def execute_command(self, command):
@@ -238,19 +249,20 @@ def generate_response():
 # SocketIO Events
 @socketio.on('connect')
 def handle_connect():
-    print(f'Client connected: {request.sid}')
+    # print(f'Client connected: {request.sid}')
     emit('connection_response', {'data': 'Connected to AI Terminal'})
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    print(f'Client disconnected: {request.sid}')
     # Clean up SSH connections
     if request.sid in ssh_connections:
         ssh_connections[request.sid].disconnect()
         del ssh_connections[request.sid]
-    # Clean up conversation history
-    if request.sid in conversation_histories:
-        del conversation_histories[request.sid]
+    # Clean up both histories
+    if request.sid in chat_histories:
+        del chat_histories[request.sid]
+    if request.sid in terminal_histories:
+        del terminal_histories[request.sid]
 
 @socketio.on('ai_execute_command')
 def handle_ai_execute_command(data):
@@ -270,20 +282,19 @@ def handle_ai_execute_command(data):
             })
             return
         
-        # If server-side history is empty and client provided history, seed it
-        if not conversation_histories.get(request.sid) and history:
-            # Expecting history to be a list of dicts with role/content
+        # If terminal-side history is empty and client provided history, seed it
+        if not terminal_histories.get(request.sid) and history:
             try:
                 for msg in history[-50:]:
                     role = msg.get('role', 'user')
                     content = msg.get('content', '')
                     if content:
-                        add_to_history(request.sid, role, content)
+                        add_to_history(request.sid, role, content, chat=False)
             except Exception:
                 pass
 
-        # Build conversation context from server-side history (last 5 messages)
-        context = format_history_for_prompt(request.sid, last_n=5)
+        # Build conversation context from terminal history (last 5 messages)
+        context = format_history_for_prompt(request.sid, last_n=5, chat=False)
 
         # Create a prompt for the AI to interpret the command
         prompt = f"""You are {ai_name}, a {ai_role}. YOU HAVE FULL SSH ACCESS TO THE SERVER and can run any command.
@@ -319,9 +330,9 @@ DECISION: CONVERSATION
 COMMAND: NONE
 RESPONSE: Hi there! I'm ready to help you with any server tasks or questions you have."""
         
-        print(f'[AI] User request: {request_text}')
-        print(f'[AI] Conversation history messages: {len(history)}')
-        print(f'[AI] Using model: {model}')
+        # print(f'[AI] User request: {request_text}')
+        # print(f'[AI] Conversation history messages: {len(history)}')
+        # print(f'[AI] Using model: {model}')
         
         client = OllamaClient(host=url, model=model)
         success, response = client.generate(prompt)
@@ -333,10 +344,10 @@ RESPONSE: Hi there! I'm ready to help you with any server tasks or questions you
             })
             return
         
-        print(f'[AI] Raw response:\n{response}')
-        # Append AI response to server-side history for continuity
+        # print(f'[AI] Raw response:\n{response}')
+        # Append AI response to **terminal** history for context
         try:
-            add_to_history(request.sid, 'assistant', response)
+            add_to_history(request.sid, 'assistant', response, chat=False)
         except Exception:
             pass
         
@@ -353,12 +364,12 @@ RESPONSE: Hi there! I'm ready to help you with any server tasks or questions you
             
             if line_stripped.startswith('DECISION:'):
                 response_type = line_stripped.replace('DECISION:', '').strip().upper()
-                print(f'[AI] Found DECISION: {response_type}')
+                # print(f'[AI] Found DECISION: {response_type}')
             elif line_stripped.startswith('COMMAND:'):
                 cmd_part = line_stripped.replace('COMMAND:', '').strip()
                 if cmd_part.upper() != 'NONE':
                     command = cmd_part
-                print(f'[AI] Found COMMAND: {command}')
+                # print(f'[AI] Found COMMAND: {command}')
             elif line_stripped.startswith('RESPONSE:'):
                 # Capture the rest of the response (everything after RESPONSE:)
                 response_started = True
@@ -368,33 +379,34 @@ RESPONSE: Hi there! I'm ready to help you with any server tasks or questions you
                 for j in range(i + 1, len(lines)):
                     remaining_lines.append(lines[j].rstrip())
                 ai_response = '\n'.join(remaining_lines)
-                print(f'[AI] Found RESPONSE (multi-line): {ai_response[:100]}...')
+                # print(f'[AI] Found RESPONSE (multi-line): {ai_response[:100]}...')
                 break  # Stop processing once we hit RESPONSE
         
-        print(f'[AI] Parsed - Type: {response_type}, Command: {command}, Response length: {len(ai_response)}')
+        # print(f'[AI] Parsed - Type: {response_type}, Command: {command}, Response length: {len(ai_response)}')
         
         # If it's just conversation or no command needed
         if response_type == 'CONVERSATION' or command is None or command == 'NONE':
-            # Append AI message to server-side history
+            # conversation replies go to terminal history but are not sent to the chat
             try:
-                add_to_history(request.sid, 'assistant', ai_response if ai_response else response)
+                add_to_history(request.sid, 'assistant', ai_response if ai_response else response, chat=False)
             except Exception:
                 pass
             emit('ai_command_result', {
                 'success': True,
                 'output': ai_response if ai_response else response,
                 'type': 'info',
-                'history': conversation_histories.get(request.sid, [])
+                # history for terminal context only
+                'history': terminal_histories.get(request.sid, [])
             })
             return
         
         # Execute the command
-        print(f'[AI] Executing command: {command}')
+        # print(f'[AI] Executing command: {command}')
         ssh_client = ssh_connections[request.sid]
         success, command_output = ssh_client.execute_command(command)
         
-        print(f'[AI] Command executed successfully: {success}')
-        print(f'[AI] Command output: {command_output}')
+        # print(f'[AI] Command executed successfully: {success}')
+        # print(f'[AI] Command output: {command_output}')
         
         # Ask the AI to comment on the actual output (summarize, highlight errors, or make a light joke if empty)
         try:
@@ -597,13 +609,13 @@ def handle_ollama_prompt(data):
         success, response = client.generate(full_prompt)
 
         if success:
-            # Append messages to history for continuity
-            add_to_history(request.sid, 'user', prompt)
-            add_to_history(request.sid, 'assistant', response)
+            # Append messages to chat history only
+            add_to_history(request.sid, 'user', prompt, chat=True)
+            add_to_history(request.sid, 'assistant', response, chat=True)
             emit('ai_response', {
                 'success': True,
                 'response': response,
-                'history': conversation_histories.get(request.sid, [])
+                'history': chat_histories.get(request.sid, [])
             })
         else:
             emit('ai_response', {'success': False, 'error': response})
@@ -639,17 +651,19 @@ def handle_command_generation(data):
 
 @socketio.on('get_history')
 def handle_get_history(_data=None):
-    """Return the conversation history for this socket session."""
+    """Return only the _chat_ history for this socket session."""
     try:
-        emit('history', {'success': True, 'history': conversation_histories.get(request.sid, [])})
+        emit('history', {'success': True, 'history': chat_histories.get(request.sid, [])})
     except Exception as e:
         emit('history', {'success': False, 'error': str(e)})
 
 @socketio.on('clear_history')
 def handle_clear_history(_data=None):
     try:
-        if request.sid in conversation_histories:
-            del conversation_histories[request.sid]
+        if request.sid in chat_histories:
+            del chat_histories[request.sid]
+        if request.sid in terminal_histories:
+            del terminal_histories[request.sid]
         emit('history_cleared', {'success': True})
     except Exception as e:
         emit('history_cleared', {'success': False, 'error': str(e)})

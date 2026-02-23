@@ -23,9 +23,15 @@ let aiRole = 'Linux Expert';
 let autoExecute = true;
 let currentTheme = 'dark';
 
-// conversation history - stores all interactions for context
-let conversationHistory = [];
+// chat history (AI tab) - stores only messages exchanged in the AI chat
+let chatHistory = [];
 let maxHistoryMessages = 10; // Keep last 10 messages for context
+
+// history used by terminal AI assistance (does not sync to chat)
+let terminalHistory = [];
+
+// helper tracking last terminal command (for possible future use)
+let lastTerminalCommand = '';
 
 // apply chosen theme by toggling class on document body
 function applyTheme(theme) {
@@ -225,82 +231,58 @@ socket.on('command_output', (data) => {
     } else {
         addTerminalOutput('Error', data.output, 'error');
     }
+
+    // no automatic forwarding or connection between terminal and chat;
+    // terminal output should remain in terminal only
 });
 
 socket.on('ai_response', (data) => {
-    // remove any thinking indicator when we get a response
     removeAIThinking();
     if (data.success) {
-        // If server provided a canonical history, sync it and render
         if (data.history && Array.isArray(data.history)) {
-            conversationHistory = data.history.slice();
+            // incoming history comes from explicit AI chat only
+            chatHistory = data.history.slice();
             renderHistory();
         } else {
             addAIMessage('assistant', data.response);
-            conversationHistory.push({ role: 'assistant', content: data.response, timestamp: new Date().toISOString() });
+            chatHistory.push({ role: 'assistant', content: data.response, timestamp: new Date().toISOString() });
         }
     } else {
         addAIMessage('assistant', `Error: ${data.error}`, 'error');
-        conversationHistory.push({ role: 'assistant', content: `Error: ${data.error}`, timestamp: new Date().toISOString(), isError: true });
+        chatHistory.push({ role: 'assistant', content: `Error: ${data.error}`, timestamp: new Date().toISOString(), isError: true });
     }
 });
 
 socket.on('generated_command', (data) => {
-    // remove thinking indicator when a generated command arrives
     removeAIThinking();
     if (data.success) {
-        const aiNameDisplay = document.getElementById('ai-name').value;
-        addTerminalOutput(aiNameDisplay, `Generated command: ${data.command}`, 'ai');
-        
-        // Add AI response to history
-        conversationHistory.push({
+        addAIMessage('assistant', `Generated command: ${data.command}`, 'ai');
+        chatHistory.push({
             role: 'assistant',
             content: `Generated command: ${data.command}`,
             timestamp: new Date().toISOString()
         });
-        
         if (autoExecute && data.auto_run) {
-            // Auto-execute the command
-            addTerminalOutput('System', 'Executing command...', 'success');
             socket.emit('ssh_command', { command: data.command });
         } else {
-            // Just show in input for manual execution
             commandInput.value = data.command;
             commandInput.focus();
         }
     } else {
-        addTerminalOutput('Error', data.error, 'error');
+        addAIMessage('assistant', `Error: ${data.error}`, 'error');
     }
 });
 
 socket.on('ai_command_result', (data) => {
-    // remove thinking indicator when command result arrives
     removeAIThinking();
     if (data.success) {
         const aiNameDisplay = document.getElementById('ai-name').value || 'Assistant';
         addTerminalOutput(aiNameDisplay, data.output, data.type || 'success');
-        
-        // If server provided history, sync and render; otherwise append
-        if (data.history && Array.isArray(data.history)) {
-            conversationHistory = data.history.slice();
-            renderHistory();
-        } else {
-            conversationHistory.push({
-                role: 'assistant',
-                content: data.output,
-                timestamp: new Date().toISOString()
-            });
-        }
+        // also record in terminalHistory for context
+        terminalHistory.push({ role: 'assistant', content: data.output, timestamp: new Date().toISOString() });
+        if (terminalHistory.length > maxHistoryMessages) terminalHistory = terminalHistory.slice(-maxHistoryMessages);
     } else {
         addTerminalOutput('Error', data.error || 'Command execution failed', 'error');
-        
-        // Add error to history
-        conversationHistory.push({
-            role: 'assistant',
-            content: data.error || 'Command execution failed',
-            timestamp: new Date().toISOString(),
-            isError: true
-        });
     }
 });
 
@@ -390,46 +372,56 @@ commandInput.addEventListener('keydown', (e) => {
 
 commandInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
-        const command = commandInput.value.trim();
-        if (command) {
-            addTerminalOutput('You', `$ ${command}`, 'command');
-            
-            // Add to command history (avoid duplicates of the last command)
-            if (commandHistory.length === 0 || commandHistory[commandHistory.length - 1] !== command) {
-                commandHistory.push(command);
-            }
-            
-            // Reset history position
-            historyPosition = -1;
-            currentCommand = '';
-            
-            // Add to conversation history
-            conversationHistory.push({
-                role: 'user',
-                content: command,
-                timestamp: new Date().toISOString()
-            });
-            
-            // Keep only last N messages for context
-            if (conversationHistory.length > maxHistoryMessages) {
-                conversationHistory = conversationHistory.slice(-maxHistoryMessages);
-            }
-            
-            // Send to AI for interpretation and execution
-            socket.emit('ai_execute_command', {
-                request: command,
+        const raw = commandInput.value.trim();
+        if (!raw) return;
+
+        // explicit chat on prefix
+        let isAiQuery = false;
+        let queryText = raw;
+        if (raw.startsWith('? ')) {
+            isAiQuery = true;
+            queryText = raw.slice(2).trim();
+        } else if (raw.toLowerCase().startsWith('/ai ')) {
+            isAiQuery = true;
+            queryText = raw.slice(4).trim();
+        }
+
+        if (isAiQuery) {
+            addAIMessage('user', queryText);
+            socket.emit('ollama_prompt', {
+                prompt: queryText,
                 url: currentOllamaUrl,
                 model: currentModel,
-                aiName: aiName,
-                aiRole: aiRole,
-                history: conversationHistory // Pass conversation history
+                history: chatHistory.slice(-maxHistoryMessages)
             });
-
-            // show thinking indicator in AI chat while AI is processing
             showAIThinking();
-            
             commandInput.value = '';
+            document.querySelector('.tab-btn[data-tab="ai"]').click();
+            return;
         }
+
+        // regular terminal request – still let AI analyze/decide
+        addTerminalOutput('You', `$ ${raw}`, 'command');
+        lastTerminalCommand = raw;
+        if (commandHistory.length === 0 || commandHistory[commandHistory.length - 1] !== raw) {
+            commandHistory.push(raw);
+        }
+        historyPosition = -1;
+        currentCommand = '';
+
+        // send to AI backend for interpretation/execution; supply terminal-specific history
+        terminalHistory.push({ role: 'user', content: raw, timestamp: new Date().toISOString() });
+        if (terminalHistory.length > maxHistoryMessages) terminalHistory = terminalHistory.slice(-maxHistoryMessages);
+        socket.emit('ai_execute_command', {
+            request: raw,
+            url: currentOllamaUrl,
+            model: currentModel,
+            aiName: aiName,
+            aiRole: aiRole,
+            history: terminalHistory
+        });
+        // do not show AI thinking in chat when processing a terminal command
+        commandInput.value = '';
     }
 });
 
@@ -442,7 +434,7 @@ aiInput.addEventListener('keypress', (e) => {
                 prompt,
                 url: currentOllamaUrl,
                 model: currentModel,
-                history: conversationHistory.slice(-maxHistoryMessages)
+                history: chatHistory.slice(-maxHistoryMessages)
             });
             // show thinking indicator in AI chat while waiting for response
             showAIThinking();
@@ -475,7 +467,7 @@ function sendAIPrompt() {
         addAIMessage('user', prompt);
         socket.emit('ollama_prompt', { 
             prompt,
-            history: conversationHistory.slice(-maxHistoryMessages)
+            history: chatHistory.slice(-maxHistoryMessages)
         });
         aiInput.value = '';
     }
@@ -534,13 +526,13 @@ function addAIMessage(role, content, type = 'normal', skipHistoryPush = false) {
     const contentDiv = document.createElement('div');
     contentDiv.className = `ai-content ${type}`;
 
-    // Track the message to client-side conversationHistory if not synced from server
+    // Track the message to client-side chatHistory if not synced from server
     if (!skipHistoryPush) {
         if (role === 'user') {
-            // If last history entry from server already equals this content, avoid duplicate
-            const last = conversationHistory[conversationHistory.length - 1];
+            // If last history entry already equals this content, avoid duplicate
+            const last = chatHistory[chatHistory.length - 1];
             if (!last || last.content !== content) {
-                conversationHistory.push({ role: 'user', content: content, timestamp: new Date().toISOString() });
+                chatHistory.push({ role: 'user', content: content, timestamp: new Date().toISOString() });
             }
         }
     }
@@ -768,16 +760,14 @@ function removeAIThinking() {
     if (el) el.remove();
 }
 
-// Render the full conversation history (clears and re-renders)
+// Render the full chat history (clears and re-renders)
 function renderHistory() {
-    // Clear current messages
     aiOutput.innerHTML = '';
-    if (!conversationHistory || conversationHistory.length === 0) return;
-    conversationHistory.forEach(msg => {
+    if (!chatHistory || chatHistory.length === 0) return;
+    chatHistory.forEach(msg => {
         const role = msg.role === 'assistant' ? 'assistant' : 'user';
         addAIMessage(role, msg.content, msg.isError ? 'error' : 'normal', true);
     });
-    // After re-rendering history, show the *start* of the latest message (so reading begins at message top)
     const lastMsg = aiOutput.querySelector('.ai-message:last-child');
     if (lastMsg) {
         try { lastMsg.scrollIntoView({ behavior: 'auto', block: 'start' }); }
@@ -790,7 +780,8 @@ function renderHistory() {
 // Handle server-sent history on initial fetch
 socket.on('history', (data) => {
     if (data.success) {
-        conversationHistory = data.history.slice();
+        // drop any legacy terminal‑analysis messages (e.g. DECISION: COMMAND)
+        chatHistory = data.history.filter(m => !/^DECISION:/i.test(m.content));
         renderHistory();
     } else {
         console.error('Failed to fetch history:', data.error);

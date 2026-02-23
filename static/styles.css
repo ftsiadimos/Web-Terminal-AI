@@ -56,6 +56,7 @@ body {
     display: flex;
     flex: 1;
     overflow: hidden;
+    min-width: 0;
 }
 
 .sidebar {
@@ -320,12 +321,20 @@ body {
 .terminal-output,
 .ai-output {
     flex: 1;
+    min-width: 0;
     overflow-y: auto;
+    /* horizontal scroll inside panel if inevitable */
+    overflow-x: auto;
     margin-bottom: 15px;
     padding: 10px;
     background: #0d1117;
     border: 1px solid #30363d;
     border-radius: 4px;
+    /* wrap long lines to avoid expanding layout */
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    max-width: 100%;
 }
 
 .output-line {
@@ -333,6 +342,8 @@ body {
     margin-bottom: 8px;
     word-wrap: break-word;
     white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-width: 100%;
     line-height: 1.5;
 }
 
