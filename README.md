@@ -2,6 +2,12 @@
 
 A lightweight Flask app that provides a web-based terminal (SSH only) alongside a separate AI chat pane, with optional Ollama-powered command assistance.
 
+<!-- badges -->
+[![Docker Pulls](https://img.shields.io/docker/pulls/ftsiadimos/webaiterminal)](https://hub.docker.com/r/ftsiadimos/webaiterminal)
+[![GitHub Container Registry](https://img.shields.io/badge/ghcr.io-available-blue)](https://ghcr.io/ftsiadimos/webaiterminal)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+
 ## Why this repo
 - Quickly prototype running AI-generated shell commands against remote hosts via SSH.
 - Useful for experimentation with Ollama models and interactive command workflows.
@@ -35,6 +41,9 @@ Follow these steps to get the project running locally.
 1. Clone the repo and run the Docker container (fastest way to try it):
 
    ```bash
+   # the official image is hosted under ftsiadimos/webaiterminal
+   # you can also pull from GitHub Container Registry:
+   #   ghcr.io/ftsiadimos/webaiterminal
    docker run -d --restart unless-stopped -p 1010:1010 --name=webaiterminal ftsiadimos/webaiterminal:latest
 
    ```
