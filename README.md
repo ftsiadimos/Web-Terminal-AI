@@ -40,13 +40,20 @@ Follow these steps to get the project running locally.
 ### Quick start
 1. Clone the repo and run the Docker container (fastest way to try it):
 
-   ```bash
-   # the official image is hosted under ftsiadimos/webaiterminal
-   # you can also pull from GitHub Container Registry:
-   #   ghcr.io/ftsiadimos/webaiterminal
-   docker run -d --restart unless-stopped -p 1010:1010 --name=webaiterminal ftsiadimos/webaiterminal:latest
+   Choose the registry you prefer and run one of the following commands:
 
+   ```bash
+   # Docker Hub (default):
+   docker run -d --restart unless-stopped \
+       -p 1010:1010 --name=webaiterminal ftsiadimos/webaiterminal:latest
+
+   # GitHub Container Registry (mirror, identical image):
+   docker run -d --restart unless-stopped \
+       -p 1010:1010 --name=webaiterminal ghcr.io/ftsiadimos/webaiterminal:latest
    ```
+
+   > Both tags are kept in sync and refer to the same build; use whichever
+   > registry works best for you (rate limits, credentials, etc.).
 
 2. Alternatively, start with Docker Compose using the example file:
 
