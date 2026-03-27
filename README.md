@@ -25,7 +25,7 @@ A lightweight Flask app that provides a web-based terminal (SSH only) alongside 
 ## Screenshot
 
 <p align="center">
-  <img src="mis/image.png" alt="Dashboard" width="90%" />
+  <img src="mis/image.webp" alt="Dashboard" width="90%" />
 </p>
 
 ---
