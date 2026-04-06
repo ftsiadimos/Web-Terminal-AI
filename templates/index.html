@@ -115,6 +115,14 @@
                 </details>
 
                 <details>
+                    <summary>Chat Sessions</summary>
+                    <div class="panel">
+                        <button class="btn btn-secondary" onclick="startNewChat()">+ New Chat</button>
+                        <div id="chat-sessions-list" style="margin-top:10px;"></div>
+                    </div>
+                </details>
+
+                <details>
                     <summary>About</summary>
                     <div class="panel">
                         <p>This web-based AI terminal provides SSH access alongside an AI chat interface. It integrates with Ollama models to generate commands, explanations, and conversational responses directly from your browser.</p>
@@ -143,6 +151,7 @@
                     <div class="input-area">
                         <input type="text" id="ai-input" class="command-input" placeholder="Ask the AI anything (won't run on server)">
                         <button class="btn btn-small" onclick="sendAIPrompt()">Send</button>
+                        <button class="btn btn-small btn-danger" onclick="clearChatHistory()" title="Clear current chat">Clear</button>
                     </div>
                 </div>
             </div>

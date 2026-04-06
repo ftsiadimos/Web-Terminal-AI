@@ -63,6 +63,139 @@ function loadSidebarState() {
     button.textContent = collapsed ? '→' : '←';
 }
 
+// ── AI chat history + session persistence ─────────────────────────────────────
+let currentSessionId = null;
+const MAX_SESSIONS = 20;
+
+function saveChatHistory() {
+    try { localStorage.setItem('aiChatHistory', JSON.stringify(chatHistory)); } catch (e) {}
+}
+
+function getSessions() {
+    try { return JSON.parse(localStorage.getItem('aiChatSessions') || '[]'); } catch (e) { return []; }
+}
+
+function setSessions(sessions) {
+    try { localStorage.setItem('aiChatSessions', JSON.stringify(sessions)); } catch (e) {}
+}
+
+function saveCurrentSession() {
+    if (!chatHistory || chatHistory.length === 0) return;
+    const sessions = getSessions();
+    const firstUser = chatHistory.find(m => m.role === 'user');
+    const title = firstUser
+        ? firstUser.content.slice(0, 40) + (firstUser.content.length > 40 ? '…' : '')
+        : 'Chat ' + new Date().toLocaleDateString();
+    if (currentSessionId) {
+        const idx = sessions.findIndex(s => s.id === currentSessionId);
+        if (idx !== -1) {
+            sessions[idx].messages = chatHistory.slice();
+            sessions[idx].updatedAt = new Date().toISOString();
+            setSessions(sessions);
+            renderSessionsList();
+            return;
+        }
+    }
+    // New session
+    currentSessionId = String(Date.now());
+    sessions.unshift({ id: currentSessionId, title, createdAt: new Date().toISOString(), messages: chatHistory.slice() });
+    if (sessions.length > MAX_SESSIONS) sessions.splice(MAX_SESSIONS);
+    setSessions(sessions);
+    renderSessionsList();
+}
+
+function loadSession(id) {
+    const sessions = getSessions();
+    const session = sessions.find(s => s.id === id);
+    if (!session) return;
+    currentSessionId = id;
+    chatHistory = session.messages.slice();
+    saveChatHistory();
+    // Seed server-side history so the next AI prompt has full context
+    socket.emit('seed_history', { messages: chatHistory });
+    renderHistory();
+    renderSessionsList();
+    // Switch to AI tab
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    const aiTabBtn = document.querySelector('.tab-btn[data-tab="ai"]');
+    const aiTabContent = document.getElementById('ai');
+    if (aiTabBtn) aiTabBtn.classList.add('active');
+    if (aiTabContent) aiTabContent.classList.add('active');
+}
+
+function deleteSession(id) {
+    let sessions = getSessions();
+    sessions = sessions.filter(s => s.id !== id);
+    setSessions(sessions);
+    if (currentSessionId === id) {
+        currentSessionId = null;
+        chatHistory = [];
+        localStorage.removeItem('aiChatHistory');
+        aiOutput.innerHTML = '';
+    }
+    renderSessionsList();
+}
+
+function startNewChat() {
+    if (chatHistory.length > 0) saveCurrentSession();
+    currentSessionId = null;
+    chatHistory = [];
+    localStorage.removeItem('aiChatHistory');
+    aiOutput.innerHTML = '';
+    socket.emit('clear_history');
+    renderSessionsList();
+}
+
+function clearChatHistory() {
+    chatHistory = [];
+    currentSessionId = null;
+    localStorage.removeItem('aiChatHistory');
+    aiOutput.innerHTML = '';
+    socket.emit('clear_history');
+    renderSessionsList();
+}
+
+function renderSessionsList() {
+    const container = document.getElementById('chat-sessions-list');
+    if (!container) return;
+    const sessions = getSessions();
+    if (sessions.length === 0) {
+        container.innerHTML = '<p style="font-size:11px;color:#8b949e;margin:4px 0;">No saved sessions yet.</p>';
+        return;
+    }
+    container.innerHTML = '';
+    sessions.forEach(session => {
+        const item = document.createElement('div');
+        item.className = 'session-item' + (session.id === currentSessionId ? ' active' : '');
+
+        const titleEl = document.createElement('span');
+        titleEl.className = 'session-item-title';
+        titleEl.title = session.title;
+        titleEl.textContent = session.title;
+        titleEl.onclick = () => loadSession(session.id);
+
+        const dateEl = document.createElement('span');
+        dateEl.className = 'session-item-date';
+        dateEl.textContent = new Date(session.createdAt).toLocaleDateString();
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'session-delete-btn';
+        delBtn.title = 'Delete session';
+        delBtn.textContent = '✕';
+        delBtn.onclick = (e) => { e.stopPropagation(); deleteSession(session.id); };
+
+        const meta = document.createElement('div');
+        meta.className = 'session-item-meta';
+        meta.appendChild(dateEl);
+        meta.appendChild(delBtn);
+
+        item.appendChild(titleEl);
+        item.appendChild(meta);
+        container.appendChild(item);
+    });
+}
+
 // Command history for arrow key navigation
 let commandHistory = [];
 let historyPosition = -1;
@@ -262,13 +395,19 @@ socket.on('ai_response', (data) => {
             // incoming history comes from explicit AI chat only
             chatHistory = data.history.slice();
             renderHistory();
+            saveChatHistory();
+            saveCurrentSession();
         } else {
             addAIMessage('assistant', data.response);
             chatHistory.push({ role: 'assistant', content: data.response, timestamp: new Date().toISOString() });
+            saveChatHistory();
+            saveCurrentSession();
         }
     } else {
         addAIMessage('assistant', `Error: ${data.error}`, 'error');
         chatHistory.push({ role: 'assistant', content: `Error: ${data.error}`, timestamp: new Date().toISOString(), isError: true });
+        saveChatHistory();
+        saveCurrentSession();
     }
 });
 
@@ -281,6 +420,8 @@ socket.on('generated_command', (data) => {
             content: `Generated command: ${data.command}`,
             timestamp: new Date().toISOString()
         });
+        saveChatHistory();
+        saveCurrentSession();
         if (autoExecute && data.auto_run) {
             socket.emit('ssh_command', { command: data.command });
         } else {
@@ -552,6 +693,7 @@ function addAIMessage(role, content, type = 'normal', skipHistoryPush = false) {
             const last = chatHistory[chatHistory.length - 1];
             if (!last || last.content !== content) {
                 chatHistory.push({ role: 'user', content: content, timestamp: new Date().toISOString() });
+                saveChatHistory();
             }
         }
     }
@@ -800,8 +942,33 @@ function renderHistory() {
 socket.on('history', (data) => {
     if (data.success) {
         // drop any legacy terminal‑analysis messages (e.g. DECISION: COMMAND)
-        chatHistory = data.history.filter(m => !/^DECISION:/i.test(m.content));
+        const serverHistory = data.history.filter(m => !/^DECISION:/i.test(m.content));
+        if (serverHistory.length > 0) {
+            chatHistory = serverHistory;
+            saveChatHistory();
+            saveCurrentSession();
+        } else {
+            // Server session is new/reconnected; restore from localStorage
+            try {
+                const saved = localStorage.getItem('aiChatHistory');
+                chatHistory = saved ? JSON.parse(saved) : [];
+                // Try to match to an existing session
+                if (chatHistory.length > 0 && !currentSessionId) {
+                    const sessions = getSessions();
+                    // Find most recent session whose messages match
+                    const match = sessions.find(s =>
+                        s.messages.length === chatHistory.length &&
+                        s.messages[0] && chatHistory[0] &&
+                        s.messages[0].content === chatHistory[0].content
+                    );
+                    if (match) currentSessionId = match.id;
+                }
+            } catch (e) {
+                chatHistory = [];
+            }
+        }
         renderHistory();
+        renderSessionsList();
     } else {
         console.error('Failed to fetch history:', data.error);
     }
@@ -951,6 +1118,7 @@ window.addEventListener('load', async () => {
     }
     
     loadSidebarState();
+    renderSessionsList();
     commandInput.focus();
     addTerminalOutput('System', 'AI Terminal Ready', 'success');
     addTerminalOutput('Help', 'Enter commands or describe what you want to do. AI will execute them for you.', 'normal');

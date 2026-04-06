@@ -657,6 +657,25 @@ def handle_get_history(_data=None):
     except Exception as e:
         emit('history', {'success': False, 'error': str(e)})
 
+@socketio.on('seed_history')
+def handle_seed_history(data):
+    """Seed the server-side chat history for this session from the client.
+
+    Called when the user loads a saved session from local storage so that
+    subsequent AI prompts have full context.
+    """
+    try:
+        messages = data.get('messages', [])
+        chat_histories[request.sid] = []
+        for msg in messages[-100:]:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            if role in ('user', 'assistant') and content:
+                add_to_history(request.sid, role, content, chat=True)
+        emit('history_seeded', {'success': True})
+    except Exception as e:
+        emit('history_seeded', {'success': False, 'error': str(e)})
+
 @socketio.on('clear_history')
 def handle_clear_history(_data=None):
     try:
