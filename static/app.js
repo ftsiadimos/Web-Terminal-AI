@@ -43,6 +43,25 @@ function applyTheme(theme) {
     }
 }
 
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const button = document.getElementById('sidebar-toggle-btn');
+    if (!sidebar || !button) return;
+
+    const collapsed = sidebar.classList.toggle('collapsed');
+    button.textContent = collapsed ? '→' : '←';
+    localStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+}
+
+function loadSidebarState() {
+    const sidebar = document.querySelector('.sidebar');
+    const button = document.getElementById('sidebar-toggle-btn');
+    if (!sidebar || !button) return;
+
+    const collapsed = localStorage.getItem('sidebarCollapsed') === '1';
+    sidebar.classList.toggle('collapsed', collapsed);
+    button.textContent = collapsed ? '→' : '←';
+}
 
 // Command history for arrow key navigation
 let commandHistory = [];
@@ -931,6 +950,7 @@ window.addEventListener('load', async () => {
         applyTheme(themeSelect.value || currentTheme);
     }
     
+    loadSidebarState();
     commandInput.focus();
     addTerminalOutput('System', 'AI Terminal Ready', 'success');
     addTerminalOutput('Help', 'Enter commands or describe what you want to do. AI will execute them for you.', 'normal');
