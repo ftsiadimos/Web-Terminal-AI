@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web AI Terminal</title>
+  <meta name="description" content="A lightweight web UI combining SSH terminal access with AI-powered command assistance via Ollama." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --code-bg: #1f2937;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.85);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 2rem;
+    }
+    nav .brand {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    nav .brand span { color: var(--accent); }
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 1.5rem;
+    }
+    nav ul a { color: var(--muted); font-size: 0.9rem; }
+    nav ul a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 5rem 2rem 4rem;
+      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(88,166,255,0.12) 0%, transparent 70%);
+    }
+    .hero .badge-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    .hero .badge-row img { height: 20px; }
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 600px;
+      margin: 0 auto 2rem;
+    }
+    .btn-group {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.6rem 1.4rem;
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; text-decoration: none; }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+
+    /* ── SCREENSHOT ── */
+    .screenshot {
+      padding: 1rem 2rem 4rem;
+      text-align: center;
+    }
+    .screenshot img {
+      max-width: min(900px, 100%);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: 0 16px 64px rgba(0,0,0,0.5);
+    }
+
+    /* ── FEATURES ── */
+    .section { padding: 4rem 2rem; max-width: 1100px; margin: 0 auto; }
+    .section-title {
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .section-title span { color: var(--accent); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .feature-card .icon { font-size: 1.8rem; margin-bottom: 0.75rem; }
+    .feature-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .feature-card p { font-size: 0.875rem; color: var(--muted); }
+
+    /* ── INSTALL ── */
+    .install-section {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .tabs {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .tab {
+      padding: 0.5rem 1.1rem;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.25rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      position: relative;
+    }
+    code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+    .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.6rem;
+      background: var(--border);
+      border: none;
+      color: var(--muted);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .copy-btn:hover { background: var(--accent); color: #0d1117; }
+
+    /* ── ENV VARS ── */
+    .env-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .env-table th, .env-table td {
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .env-table th { color: var(--muted); font-weight: 600; background: var(--surface); }
+    .env-table tr:last-child td { border-bottom: none; }
+    .env-table code { background: var(--code-bg); padding: 0.1em 0.4em; border-radius: 4px; font-size: 0.8rem; }
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    /* ── VERSION ── */
+    .version-badge {
+      display: inline-block;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      color: var(--accent2);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15em 0.6em;
+      border-radius: 2em;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      text-align: center;
+      padding: 2rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    footer a { color: var(--muted); }
+    footer a:hover { color: var(--text); }
+
+    @media (max-width: 600px) {
+      nav ul { display: none; }
+      .hero { padding: 3.5rem 1rem 2.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="brand">&#x1F916; <span>Web</span>AI Terminal</div>
+  <ul>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#config">Config</a></li>
+    <li><a href="https://github.com/ftsiadimos/Web-Terminal-AI" target="_blank" rel="noopener">GitHub ↗</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="badge-row">
+    <img src="https://img.shields.io/docker/pulls/ftsiadimos/webaiterminal" alt="Docker Pulls" />
+    <img src="https://img.shields.io/badge/ghcr.io-available-blue" alt="GHCR" />
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" />
+    <img src="https://img.shields.io/badge/python-3.7%2B-blue" alt="Python 3.7+" />
+  </div>
+  <h1>Web&nbsp;<span>AI</span>&nbsp;Terminal <span class="version-badge">v2.3.0</span></h1>
+  <p>A lightweight Flask app that puts a web-based SSH terminal and an Ollama-powered AI chat pane in your browser — side by side.</p>
+  <div class="btn-group">
+    <a class="btn btn-primary" href="#install">&#x1F680; Get started</a>
+    <a class="btn btn-secondary" href="https://github.com/ftsiadimos/Web-Terminal-AI" target="_blank" rel="noopener">
+      &#x2B06; View on GitHub
+    </a>
+    <a class="btn btn-secondary" href="https://hub.docker.com/r/ftsiadimos/webaiterminal" target="_blank" rel="noopener">
+      &#x1F433; Docker Hub
+    </a>
+  </div>
+</section>
+
+<!-- SCREENSHOT -->
+<div class="screenshot">
+  <img src="https://raw.githubusercontent.com/ftsiadimos/Web-Terminal-AI/main/mis/image.webp" alt="Web AI Terminal screenshot" />
+</div>
+
+<!-- FEATURES -->
+<section class="section" id="features">
+  <h2 class="section-title">Key <span>features</span></h2>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="icon">&#x1F5A5;&#xFE0F;</div>
+      <h3>Web SSH Terminal</h3>
+      <p>Full browser-based terminal backed by Paramiko SSH. No client software needed.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">&#x1F916;</div>
+      <h3>Ollama AI Chat</h3>
+      <p>Dedicated AI tab powered by local Ollama models. Use <code>?</code> or <code>/ai</code> prefixes, or let errors auto-forward.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">&#x1F4AC;</div>
+      <h3>Multi-tab Interface</h3>
+      <p>Switch between terminal and chat panes in a unified, responsive UI.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">&#x26A1;</div>
+      <h3>Real-time Updates</h3>
+      <p>Socket.IO keeps the terminal and AI responses live without page reloads.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">&#x1F433;</div>
+      <h3>Docker-ready</h3>
+      <p>Single-command startup via Docker Hub or GitHub Container Registry. Compose file included.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">&#x1F512;</div>
+      <h3>Encrypted Credentials</h3>
+      <p>SSH passwords are stored with Fernet symmetric encryption. Plain-text fallback disabled when a key is set.</p>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<div class="install-section" id="install">
+<section class="section">
+  <h2 class="section-title">Quick <span>start</span></h2>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab(event,'docker')">Docker</button>
+    <button class="tab" onclick="switchTab(event,'compose')">Docker Compose</button>
+    <button class="tab" onclick="switchTab(event,'local')">Local dev</button>
+  </div>
+
+  <div id="tab-docker" class="tab-panel active">
+    <p style="color:var(--muted);font-size:.875rem;margin-bottom:1rem;">Pull and run in a single command — pick your preferred registry:</p>
+    <pre><code><span style="color:var(--muted)"># Docker Hub</span>
+docker run -d --restart unless-stopped \
+    -p 1010:1010 --name=webaiterminal \
+    ftsiadimos/webaiterminal:latest
+
+<span style="color:var(--muted)"># GitHub Container Registry (identical image)</span>
+docker run -d --restart unless-stopped \
+    -p 1010:1010 --name=webaiterminal \
+    ghcr.io/ftsiadimos/webaiterminal:latest</code><button class="copy-btn" onclick="copyCode(this)">copy</button></pre>
+    <p style="margin-top:1rem;font-size:.875rem;color:var(--muted)">Then open <a href="http://localhost:1010">http://localhost:1010</a> in your browser.</p>
+  </div>
+
+  <div id="tab-compose" class="tab-panel">
+    <pre><code>git clone https://github.com/ftsiadimos/Web-Terminal-AI
+cd Web-AI-Terminal
+cp docker-compose.example.yml docker-compose.yml
+<span style="color:var(--muted)"># edit docker-compose.yml to set env vars</span>
+docker compose pull
+docker compose up -d</code><button class="copy-btn" onclick="copyCode(this)">copy</button></pre>
+  </div>
+
+  <div id="tab-local" class="tab-panel">
+    <pre><code>git clone https://github.com/ftsiadimos/Web-Terminal-AI
+cd Web-AI-Terminal
+./start.sh          <span style="color:var(--muted)"># creates venv, installs deps, starts server</span></code><button class="copy-btn" onclick="copyCode(this)">copy</button></pre>
+    <p style="margin-top:1rem;font-size:.875rem;color:var(--muted)">Or manually:</p>
+    <pre><code>python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   <span style="color:var(--muted)"># then edit .env</span>
+python app.py</code><button class="copy-btn" onclick="copyCode(this)">copy</button></pre>
+  </div>
+</section>
+</div>
+
+<!-- CONFIG -->
+<section class="section" id="config">
+  <h2 class="section-title">Environment <span>variables</span></h2>
+  <div class="table-wrap">
+    <table class="env-table">
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>Default</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>OLLAMA_HOST</code></td>
+          <td><code>http://localhost:11434</code></td>
+          <td>Base URL of the Ollama API server.</td>
+        </tr>
+        <tr>
+          <td><code>OLLAMA_MODEL</code></td>
+          <td><code>llama2</code></td>
+          <td>Model name to use for AI responses.</td>
+        </tr>
+        <tr>
+          <td><code>SECRET_KEY</code></td>
+          <td>random</td>
+          <td>Flask session secret. Set a stable value in production.</td>
+        </tr>
+        <tr>
+          <td><code>SETTINGS_ENC_KEY</code></td>
+          <td><em>none</em></td>
+          <td>Fernet key for encrypting stored SSH passwords. Generate with <code>python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code>.</td>
+        </tr>
+        <tr>
+          <td><code>FLASK_ENV</code></td>
+          <td><code>production</code></td>
+          <td>Set to <code>development</code> for debug reloading.</td>
+        </tr>
+        <tr>
+          <td><code>FLASK_DEBUG</code></td>
+          <td><code>0</code></td>
+          <td>Enable Flask debug mode (<code>1</code> = on).</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>
+    <strong>Web AI Terminal</strong> v2.3.0 &mdash;
+    <a href="https://github.com/ftsiadimos/Web-Terminal-AI" target="_blank" rel="noopener">GitHub</a> &middot;
+    <a href="https://hub.docker.com/r/ftsiadimos/webaiterminal" target="_blank" rel="noopener">Docker Hub</a> &middot;
+    Released under the <a href="https://github.com/ftsiadimos/Web-Terminal-AI/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+  </p>
+</footer>
+
+<script>
+  function switchTab(e, id) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+    document.getElementById('tab-' + id).classList.add('active');
+  }
+
+  function copyCode(btn) {
+    const text = btn.closest('pre').querySelector('code').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'copied!';
+      setTimeout(() => btn.textContent = 'copy', 1800);
+    });
+  }
+</script>
+</body>
+</html>
